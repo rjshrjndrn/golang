@@ -22,7 +22,8 @@ func helloWorld(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%q: %q\n", k, v)
 		}
 	}
-	fmt.Fprintf(w, "%q", r.Proto)
+	fmt.Fprintf(w, "\"HTTPVersion\": %q\n", r.Proto)
+	fmt.Fprintf(w, "\"RequestPath\": %q", r.URL.Path)
 
 }
 
