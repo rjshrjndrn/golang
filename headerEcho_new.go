@@ -23,6 +23,11 @@ import (
 	"net/http"
 )
 
+func helloError(res http.ResponseWriter, r *http.Request) {
+	res.WriteHeader(500)
+	res.Write([]byte("Boom!"))
+}
+
 func helloWorld(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
@@ -32,17 +37,19 @@ func helloWorld(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Printf("%s\n", reqBody)
-		w.Write([]byte(reqBody))
+		fmt.Fprintf(w, "Body: %s\n", reqBody)
 	default:
 		for k, v := range r.Header {
-			fmt.Fprintf(w, "%q: %q\n", k, v)
+			fmt.Fprintf(w, "%s: %s\n", k, v)
 		}
 	}
-	fmt.Fprintf(w, "\"HTTPVersion\": %q\n", r.Proto)
-	fmt.Fprintf(w, "\"RequestPath\": %q", r.URL.Path)
+	fmt.Fprintf(w, "HTTPVersion: %s\n", r.Proto)
+	fmt.Fprintf(w, "RequestPath: %s\n", r.URL.Path)
+	fmt.Fprintf(w, "Version: v3")
 }
 
 func main() {
 	http.HandleFunc("/", helloWorld)
+	http.HandleFunc("/error", helloError)
 	http.ListenAndServe(":4000", nil)
 }
