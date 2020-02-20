@@ -7,40 +7,17 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	kafka "github.com/segmentio/kafka-go"
 )
-
-func helloError(res http.ResponseWriter, r *http.Request) {
-	res.WriteHeader(500)
-	res.Write([]byte("Boom!"))
-}
-func kafkaObject() *kafka.Conn {
-	// Getting kafka host
-	kafka_host := "50.1.0.5:9092" // os.Getenv("kafka_host")
-	// Getting kafka topic
-	kafka_topic := "devcon.iot.metrics" //os.Getenv("kafka_topic")
-	// Checking for mandatory variables
-	if kafka_topic == "" || kafka_host == "" {
-		log.Panic("kafka_topic or kafka_host environment variables not set")
-	}
-
-	// Creating Kafka connection
-	conn, err := kafka.DialLeader(context.Background(), "tcp", kafka_host, kafka_topic, 0)
-	if err != nil {
-		log.Fatalf("Coudn't connect to kafka. error is %q", err)
-	}
-	return conn
-}
 
 type metrics struct {
 	Ets   int64
 	Value string
 	Name  string
 }
-
-var conn *kafka.Conn
 
 // Create a new metrics instance with
 // default values except measurement
@@ -52,11 +29,14 @@ func NewMetric(val string) ([]byte, error) {
 	return json.Marshal(metric)
 }
 
-func helloWorld(w http.ResponseWriter, r *http.Request) {
+func helloError(res http.ResponseWriter, r *http.Request) {
+	res.WriteHeader(500)
+	res.Write([]byte("Boom!"))
+}
 
+func helloWorld(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
-		// defer conn.Close()
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			log.Fatal(err)
@@ -68,15 +48,14 @@ func helloWorld(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Printf("%s\n", newMetric)
 		// If got post, put it into kakfa
-		go func(reqBody []byte) {
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			_, err := conn.WriteMessages(
-				kafka.Message{Value: reqBody},
-			)
+		go func(payLoad []byte) {
+			kafka_writer.WriteMessages(context.Background(),
+				kafka.Message{
+					Value: payLoad,
+				})
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("Conn address: %s\n", &conn)
 		}(newMetric)
 		fmt.Fprintf(w, "Body: %s\n", reqBody)
 	default:
@@ -89,11 +68,31 @@ func helloWorld(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Version: v3")
 }
 
+var kafka_writer *kafka.Writer
+
 func main() {
-	fmt.Printf("Initializing Kafka")
-	conn = kafkaObject()
+	fmt.Printf("Initializing Kafka connection\n")
+	// Getting kafka host
+	// kafka_host := "50.1.0.5:9092" // os.Getenv("kafka_host")
+	kafka_host := os.Getenv("kafka_host")
+	// Getting kafka topic
+	// kafka_topic := "devcon.iot.metrics" //os.Getenv("kafka_topic")
+	kafka_topic := os.Getenv("kafka_topic")
+	// Checking for mandatory variables
+	if kafka_topic == "" || kafka_host == "" {
+		log.Fatalf("kafka_topic or kafka_host environment variables not set")
+	}
+	// make a writer that produces to topic-A, using the least-bytes distribution
+	kafka_writer = kafka.NewWriter(kafka.WriterConfig{
+		Brokers:  []string{kafka_host},
+		Topic:    kafka_topic,
+		Balancer: &kafka.LeastBytes{},
+	})
+	fmt.Printf("Kafka connection initialized\nhost: %s\ntopic: %s\n", kafka_host, kafka_topic)
+
 	http.HandleFunc("/", helloWorld)
 	http.HandleFunc("/error", helloError)
+	fmt.Println("HTTP server started on :4000")
 	if err := http.ListenAndServe(":4000", nil); err != nil {
 		log.Fatal(err)
 	}
