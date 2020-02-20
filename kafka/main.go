@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	kafka "github.com/segmentio/kafka-go"
@@ -23,7 +24,7 @@ type metrics struct {
 // default values except measurement
 func NewMetric(val string) ([]byte, error) {
 	metric := metrics{}
-	metric.Value = val
+	metric.Value = strings.TrimSpace(val)
 	metric.Ets = time.Now().UnixNano() / 1000000 // Converting nano to milliseconds
 	metric.Name = "Tds Metrics"
 	return json.Marshal(metric)
